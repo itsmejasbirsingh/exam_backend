@@ -7,6 +7,8 @@ from rest_framework.filters import SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from django.db.models import Q, F, Sum, Case, Value
+from rest_framework.response import Response
+from rest_framework import status
 
 
 class CourseList(ListCreateAPIView):
@@ -124,4 +126,21 @@ class TestpaperAttemptList(ListCreateAPIView):
 
     queryset = TestpaperAttempt.objects.all()
 
-    serializer_class = TestpaperAttemptSerializer
+    def post(self, request, *args, **kwargs):
+
+        attemptedTestpaper = TestpaperAttempt.objects.filter(user = self.request.user).filter(question_id = request.data.get('question')).filter(testpaperassign_id = self.kwargs.get('pk')).first()
+
+        if(attemptedTestpaper):
+            attemptedTestpaper.answer = Option.objects.filter(id = request.data.get('answer')).first()
+            attemptedTestpaper.save()
+            serializer = TestpaperAttemptSerializer(attemptedTestpaper)
+            return Response(serializer.data, status = status.HTTP_200_OK)
+
+        testpaper = TestpaperAttempt()
+        testpaper.testpaperassign = TestpaperAssign.objects.filter(id = self.kwargs.get('pk')).first()
+        testpaper.question = Question.objects.filter(id = request.data.get('question')).first()
+        testpaper.answer = Option.objects.filter(id = request.data.get('answer')).first()
+        testpaper.user = self.request.user
+        testpaper.save()
+        serializer = TestpaperAttemptSerializer(testpaper)
+        return Response(serializer.data, status = status.HTTP_201_CREATED)

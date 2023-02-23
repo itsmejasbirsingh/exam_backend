@@ -87,6 +87,7 @@ class OptionSerializer(serializers.ModelSerializer):
         model = Option
         fields = ['id', 'option']
 
+
 class QuestionReadSerializer(serializers.ModelSerializer):
     options = OptionSerializer(source='option_set', read_only=True, many=True)
 
@@ -102,32 +103,6 @@ class QuestionReadSerializer(serializers.ModelSerializer):
     def get_correct_answer(self, question: Question):
         option = Option.objects.filter(question=question, answer=True)
         return OptionSerializer(option.last()).data
-
-
-class TestpaperAssignSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TestpaperAssign
-        fields = '__all__'
-
-    # Validate if testpaper is already assigned to selected users.
-    def validate(self, data):
-        assigned = TestpaperAssign.objects.filter(
-            user__in=data['user']).filter(testpaper=data['testpaper']).last()
-        if assigned is not None:
-            userName = ''
-            for user in assigned.user.all():
-                userName += str(user) + ', '
-            userName = userName[:-2]
-            raise serializers.ValidationError(
-                "Testpaper already assigned with %s" % (userName))
-        return data
-
-
-class TestpaperAssignReadSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TestpaperAssign
-        fields = '__all__'
-        depth = 1
 
 
 class QuestionWithoutCorrectAnswerReadSerializer(serializers.ModelSerializer):
@@ -155,6 +130,25 @@ class TestpaperSerializer(serializers.ModelSerializer):
         elif (data['time'] > 120):
             raise serializers.ValidationError(
                 "Time should not exeed 180 minutes.")
+        return data
+
+
+class TestpaperAssignSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TestpaperAssign
+        fields = '__all__'
+
+    # Validate if testpaper is already assigned to selected users.
+    def validate(self, data):
+        assigned = TestpaperAssign.objects.filter(
+            user__in=data['user']).filter(testpaper=data['testpaper']).last()
+        if assigned is not None:
+            userName = ''
+            for user in assigned.user.all():
+                userName += str(user) + ', '
+            userName = userName[:-2]
+            raise serializers.ValidationError(
+                "Testpaper already assigned with %s" % (userName))
         return data
 
 
@@ -187,10 +181,16 @@ class TestpaperAttemptSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ['user', 'testpaperassign']
 
-    def create(self, validated_data):
 
-        testpaper = TestpaperAttempt(**validated_data)
-        testpaper.testpaperassign_id = 27
-        testpaper.user = self.context['request'].user
-        testpaper.save()
-        return testpaper
+class TestpaperAssignReadSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = TestpaperAssign
+        fields = ['id', 'start_at', 'end_at', 'testpaper', 'question_attempts_count']
+        depth = 1
+
+    question_attempts_count = serializers.SerializerMethodField(
+        method_name='get_question_attempts_count')
+
+    def get_question_attempts_count(self, obj):
+        return TestpaperAttempt.objects.filter(user=self.context['request'].user).filter(testpaperassign=obj).count()
